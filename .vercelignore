@@ -1,0 +1,10 @@
+tests/
+evaluation/
+scripts/
+docs/
+sample_images/
+.github/
+*.md
+!README.md
+.env
+.venv/

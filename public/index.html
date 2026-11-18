@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vision Cart – AI listing generator</title>
+  <meta name="description" content="Snap a photo. Get a ready-to-post marketplace listing: title, description, features and tags written by AI.">
+  <meta name="theme-color" content="#6D5DFB">
+  <meta property="og:title" content="Vision Cart – AI listing generator">
+  <meta property="og:description" content="Upload product photos and get a ready-to-post marketplace listing.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="/assets/logo.png">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script type="module" src="/assets/app.js"></script>
+</head>
+<body>
+  <main class="wrap">
+    <header class="header">
+      <img src="/logo.svg" width="46" height="46" alt="" class="logo">
+      <div>
+        <h1 class="brand">Vision Cart</h1>
+        <p class="tag">Snap a photo. Get a ready-to-post listing.</p>
+      </div>
+    </header>
+
+    <noscript><p class="alert alert-warn">Vision Cart needs JavaScript to run. Please enable it and reload.</p></noscript>
+
+    <section class="card" aria-labelledby="upload-h">
+      <h2 class="section" id="upload-h">1. Add your product photos</h2>
+      <p class="muted" id="upload-hint">JPG, PNG or WEBP · up to 6 photos. Use different views of the same item. Photos are resized in your browser before upload.</p>
+
+      <label class="dropzone" id="dropzone" for="file-input">
+        <span class="dz-icon" aria-hidden="true">＋</span>
+        <span><b>Drop photos here</b> or <u>browse</u></span>
+        <input id="file-input" type="file" accept="image/jpeg,image/png,image/webp" multiple aria-describedby="upload-hint">
+      </label>
+
+      <ul class="thumbs" id="picked" aria-label="Selected photos"></ul>
+      <p class="alert alert-error" id="upload-error" role="alert" hidden></p>
+
+      <details class="options">
+        <summary>Options</summary>
+        <label class="toggle"><input type="checkbox" id="opt-auto" checked> Create the listing as soon as I add or change a photo</label>
+        <label class="toggle"><input type="checkbox" id="opt-expand" checked> Write the full description automatically</label>
+        <label class="toggle"><input type="checkbox" id="opt-images" checked> Create 3 related AI visuals</label>
+      </details>
+
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="create-btn" disabled>Create listing</button>
+      </div>
+    </section>
+
+    <div id="stepper" class="stepper" role="status" aria-live="polite" hidden></div>
+
+    <section id="hero" class="how-row" aria-label="How it works">
+      <div class="how"><span class="num">1</span><b>Upload</b><span>Drop in one or more photos of the same item.</span></div>
+      <div class="how"><span class="num">2</span><b>Review</b><span>Get a title, short and full description, features and tags.</span></div>
+      <div class="how"><span class="num">3</span><b>Post</b><span>Edit anything, copy it, and list it anywhere.</span></div>
+    </section>
+
+    <section id="loading" class="results" hidden aria-label="Working">
+      <div class="card"><div class="gallery" id="loading-gallery"></div></div>
+      <div class="card">
+        <div aria-hidden="true">
+          <div class="line skeleton w60"></div><div class="line skeleton"></div>
+          <div class="line skeleton tall"></div><div class="line skeleton w80"></div>
+        </div>
+        <p class="muted">Reading your photos and writing the listing… usually 5 to 20 seconds.</p>
+      </div>
+    </section>
+
+    <section id="error-box" class="card" hidden role="alert">
+      <p class="alert alert-error" id="error-msg"></p>
+      <p class="muted" id="error-hint"></p>
+      <p class="muted" id="error-ref"></p>
+    </section>
+
+    <section id="results" hidden aria-labelledby="results-h">
+      <h2 class="section" id="results-h">2. Your listing</h2>
+      <div class="results">
+        <div class="card">
+          <div class="gallery" id="gallery"></div>
+          <p class="note" id="ai-note" hidden></p>
+          <p class="alert alert-warn" id="images-error" hidden></p>
+          <button type="button" class="btn" id="images-btn" hidden>Regenerate visuals</button>
+        </div>
+
+        <div class="card">
+          <div id="badges"></div>
+          <p class="muted">Detected: <b id="detected"></b></p>
+          <p class="alert alert-info" id="cond-note" hidden>Condition can't be verified from these photos. Add clearer photos that show wear, or set it yourself when you post.</p>
+
+          <label class="label" for="title">Title (editable)</label>
+          <input id="title" class="input" type="text" maxlength="70" autocomplete="off">
+          <p class="muted small"><span id="title-count">0</span>/70 characters</p>
+
+          <div class="tabs" role="tablist" aria-label="Description">
+            <button type="button" role="tab" id="tab-short" aria-controls="panel-short" aria-selected="true" class="tab">Short description</button>
+            <button type="button" role="tab" id="tab-full" aria-controls="panel-full" aria-selected="false" class="tab" tabindex="-1">Full description</button>
+          </div>
+          <div role="tabpanel" id="panel-short" aria-labelledby="tab-short">
+            <textarea id="short" class="input" rows="6" aria-label="Short description (editable)"></textarea>
+          </div>
+          <div role="tabpanel" id="panel-full" aria-labelledby="tab-full" hidden>
+            <div id="full-loading" hidden aria-hidden="true">
+              <div class="line skeleton w60"></div><div class="line skeleton tall"></div>
+              <p class="muted">Writing a fuller description from your verified details…</p>
+            </div>
+            <p class="alert alert-warn" id="full-error" hidden></p>
+            <p class="muted" id="full-empty">Expand the short description into a longer, buyer-friendly one.</p>
+            <textarea id="full" class="input tall-input" rows="12" aria-label="Full description (editable)" hidden></textarea>
+            <button type="button" class="btn btn-primary" id="full-btn">✨ Write full description</button>
+          </div>
+
+          <div class="label">Key features</div>
+          <ul class="features" id="features"></ul>
+          <div class="label">Search tags</div>
+          <div class="chips" id="tags"></div>
+
+          <div class="label">Take it with you</div>
+          <div class="actions">
+            <button type="button" class="btn" id="copy-btn">Copy listing text</button>
+            <button type="button" class="btn" id="download-btn">Download JSON</button>
+          </div>
+          <p class="muted small" id="copy-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">AI can make mistakes. Check every detail against your item before you post.</footer>
+  </main>
+</body>
+</html>
