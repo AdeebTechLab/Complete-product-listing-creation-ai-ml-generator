@@ -5,18 +5,14 @@ Docs: /docs (Swagger UI) and /redoc
 """
 
 import logging
-import os
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 
 from app.api.errors import register_exception_handlers
 from app.api.middleware import install_request_context
 from app.api.routes import router
-from app.api.security import install_security
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.services.description_service import DescriptionService
@@ -24,10 +20,9 @@ from app.services.image_service import ImageService
 from app.services.listing_service import ListingService
 from app.services.related_images_service import RelatedImagesService
 from app.services.vision_service import ResilientVision, VisionService
+from app.web_ui import INDEX_HTML
 
 logger = logging.getLogger(__name__)
-
-PUBLIC_DIR = Path(__file__).resolve().parents[1] / "public"
 
 DESCRIPTION = """
 Generate structured marketplace listings (title, description, category, condition,
@@ -59,33 +54,41 @@ def _build_services(settings: Settings) -> dict:
     }
 
 
+def ensure_ready(app: FastAPI) -> None:
+    """Idempotent init of settings and services.
+
+    Called from the lifespan hook AND lazily from the dependencies, so the app also works on
+    serverless hosts (Vercel) where ASGI lifespan events may not run.
+    """
+    if app.state.settings is None:
+        app.state.settings = get_settings()
+        configure_logging(app.state.settings.log_level)
+        _apply_docs_policy(app, app.state.settings)
+    built = None
+    for name in ("listing_service", "description_service", "related_images_service"):
+        if getattr(app.state, name) is None:
+            built = built or _build_services(app.state.settings)
+            setattr(app.state, name, built[name])
+
+
 def create_app(
     settings: Settings | None = None,
     listing_service: ListingService | None = None,
     description_service: DescriptionService | None = None,
     related_images_service: RelatedImagesService | None = None,
-    serve_frontend: bool = False,
 ) -> FastAPI:
     """Both arguments are injection points for tests; production passes neither."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # Fail fast at startup if GEMINI_API_KEY etc. are missing.
-        if app.state.settings is None:
-            app.state.settings = get_settings()
-        configure_logging(app.state.settings.log_level)
-        _apply_docs_policy(app, app.state.settings)
-        built = None
-        for name in ("listing_service", "description_service", "related_images_service"):
-            if getattr(app.state, name) is None:
-                built = built or _build_services(app.state.settings)
-                setattr(app.state, name, built[name])
+        ensure_ready(app)
         logger.info("app_started", extra={"model": app.state.settings.gemini_model})
         yield
 
     app = FastAPI(
         title="AI Marketplace Listing Generator",
-        version="1.2.0",
+        version="1.1.0",
         description=DESCRIPTION,
         lifespan=lifespan,
     )
@@ -95,35 +98,15 @@ def create_app(
     app.state.related_images_service = related_images_service
     _apply_docs_policy(app, settings)
 
-    # Order matters: the last middleware added runs first, so request-id wraps security.
-    rate_limit = settings.rate_limit_per_minute if settings else _env_int("RATE_LIMIT_PER_MINUTE", 20)
-    install_security(app, rate_limit)
-    origins = settings.cors_origin_list if settings else _env_origins()
-    if origins:
-        app.add_middleware(
-            CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["*"],
-            expose_headers=["X-Request-ID", "Retry-After"], max_age=600,
-        )
     install_request_context(app)
     register_exception_handlers(app)
     app.include_router(router)
 
-    # Local dev only. On Vercel, public/ is served by the CDN and must not be mounted here.
-    if serve_frontend and PUBLIC_DIR.is_dir():
-        app.mount("/", StaticFiles(directory=PUBLIC_DIR, html=True), name="frontend")
+    @app.get("/", include_in_schema=False, response_class=HTMLResponse)
+    async def index() -> HTMLResponse:
+        return HTMLResponse(INDEX_HTML)
+
     return app
 
 
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, default))
-    except ValueError:
-        return default
-
-
-def _env_origins() -> list[str]:
-    return [o.strip().rstrip("/") for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
-
-
-# On Vercel the platform sets VERCEL=1; locally we serve the frontend ourselves.
-app = create_app(serve_frontend=not os.getenv("VERCEL"))
+app = create_app()
